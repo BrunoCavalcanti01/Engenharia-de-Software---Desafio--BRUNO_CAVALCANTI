@@ -1,0 +1,76 @@
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const creds = require('./credentials.json');
+
+// Initialize the Google Spreadsheet
+const doc = new GoogleSpreadsheet('YOUR_SHEET_ID');
+
+async function accessSpreadsheet() {
+    try {
+        // Authorize with credentials
+        await doc.useServiceAccountAuth({
+            client_email: creds.client_email,
+            private_key: creds.private_key,
+        });
+
+        // Load the document
+        await doc.loadInfo();
+
+        // Access the first sheet
+        const sheet = doc.sheetsByIndex[0];
+
+        // Load all rows
+        const rows = await sheet.getRows();
+
+        // Define objects to store sums for each spine
+        const spine1Sum = {};
+        const spine2Sum = {};
+        const spine3Sum = {};
+
+        // Iterate through each row in the worksheet, skipping the header
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const line = row._rawData[0];
+            const spine1Value = parseFloat(row._rawData[1]);
+            const spine2Value = parseFloat(row._rawData[2]);
+            const spine3Value = parseFloat(row._rawData[3]);
+
+            // Sum the values for each spine for the current line
+            spine1Sum[line] = (spine1Sum[line] || 0) + spine1Value;
+            spine2Sum[line] = (spine2Sum[line] || 0) + spine2Value;
+            spine3Sum[line] = (spine3Sum[line] || 0) + spine3Value;
+        }
+
+        // Calculate the average of the sums for each spine
+        const totalSum = {};
+        Object.keys(spine1Sum).forEach(line => {
+            const sum1 = spine1Sum[line];
+            const sum2 = spine2Sum[line];
+            const sum3 = spine3Sum[line];
+            totalSum[line] = (sum1 + sum2 + sum3) / 3;
+        });
+
+        // Check the average and number of absences for each line
+        Object.keys(totalSum).forEach(line => {
+            const total = totalSum[line];
+            const faltas = parseInt(line.split(' ')[1]); // Extracting the number of absences from the line name
+
+            if (total >= 7) {
+                if (faltas >= 15) {
+                    console.log(`Line ${line}: Not approved due to absence`);
+                } else {
+                    console.log(`Line ${line}: Approved by average`);
+                }
+            } else {
+                let notaFinal = 10 - total;
+                notaFinal = notaFinal <= 0 ? 0 : notaFinal; // Ensure the final score doesn't go negative
+                console.log(`Line ${line}: Final approval score ${notaFinal}`);
+            }
+        });
+
+    } catch (error) {
+        console.error('Error accessing spreadsheet:', error);
+    }
+}
+
+// Call the function to access the spreadsheet
+accessSpreadsheet();
